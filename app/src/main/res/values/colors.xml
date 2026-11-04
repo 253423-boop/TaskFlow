@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary_indigo">#FF1E3A8A</color>
+    <color name="primary_indigo_dark">#FF172554</color>
+    <color name="secondary_teal">#FF0D9488</color>
+    <color name="background_light">#FFF8FAFC</color>
+    <color name="surface_white">#FFFFFFFF</color>
+    <color name="error_red">#FFDC2626</color>
+    <color name="warning_amber">#FFD97706</color>
+    <color name="success_green">#FF16A34A</color>
+</resources>

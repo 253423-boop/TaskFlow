@@ -8,4 +8,17 @@
     <color name="error_red">#FFDC2626</color>
     <color name="warning_amber">#FFD97706</color>
     <color name="success_green">#FF16A34A</color>
+    <color name="status_completed_bg">#FFDCFCE7</color>
+    <color name="status_completed_text">#FF166534</color>
+    <color name="status_pending_bg">#FFFEF3C7</color>
+    <color name="status_pending_text">#FF92400E</color>
+    <color name="status_overdue_bg">#FFFEE2E2</color>
+    <color name="status_overdue_text">#FF991B1B</color>
+    <color name="priority_high_bg">#FFFEE2E2</color>
+    <color name="priority_high_text">#FF991B1B</color>
+    <color name="priority_medium_bg">#FFFEF3C7</color>
+    <color name="priority_medium_text">#FF92400E</color>
+    <color name="priority_low_bg">#FFDCFCE7</color>
+    <color name="priority_low_text">#FF166534</color>
+    <color name="overdue_red">#FFDC2626</color>
 </resources>

@@ -1,57 +1,55 @@
 package com.ivanna.proyects.taskflow.auth.presentation.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ivanna.proyects.taskflow.TaskFlowApplication
+import com.ivanna.proyects.taskflow.auth.presentation.components.AuthFooterLink
+import com.ivanna.proyects.taskflow.auth.presentation.components.AuthServerErrorText
+import com.ivanna.proyects.taskflow.auth.presentation.components.AuthSessionExpiredNotice
 import com.ivanna.proyects.taskflow.auth.presentation.components.AuthTextField
-import com.ivanna.proyects.taskflow.auth.presentation.components.TaskFlowHeader
 import com.ivanna.proyects.taskflow.auth.presentation.viewmodels.LoginViewModel
+import com.ivanna.proyects.taskflow.ui.components.TaskFlowHeader
+import com.ivanna.proyects.taskflow.ui.components.TaskFlowPrimaryButton
+import com.ivanna.proyects.taskflow.ui.theme.TaskFlowTextStyles
+import com.ivanna.proyects.taskflow.ui.theme.TaskFlowTheme
 import com.upchiapas.taskflow.R
 
 @Composable
 fun LoginPage(
-    viewModel: LoginViewModel,
+    sessionExpired: Boolean = false,
+    viewModel: LoginViewModel = viewModel(
+        factory = (LocalContext.current.applicationContext as TaskFlowApplication)
+            .authModule
+            .createLoginFactory(sessionExpired)
+    ),
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(uiState.isLoginSuccess) {
         if (uiState.isLoginSuccess) {
@@ -59,136 +57,184 @@ fun LoginPage(
         }
     }
 
-    val goToRegisterText = stringResource(id = R.string.action_go_to_register)
-    val registerHighlight = stringResource(id = R.string.register_title)
-    val registerPromptAnnotated = buildAnnotatedString {
-        val highlightIndex = goToRegisterText.indexOf(registerHighlight)
-        if (highlightIndex >= 0) {
-            append(goToRegisterText.substring(0, highlightIndex))
-            withStyle(
-                SpanStyle(
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
-            ) {
-                append(goToRegisterText.substring(highlightIndex, highlightIndex + registerHighlight.length))
-            }
-            append(goToRegisterText.substring(highlightIndex + registerHighlight.length))
-        } else {
-            append(goToRegisterText)
-        }
-    }
+    LoginContent(
+        uiState = uiState,
+        onEmailChange = viewModel::onEmailChange,
+        onPasswordChange = viewModel::onPasswordChange,
+        onSubmit = viewModel::onLoginSubmit,
+        onNavigateToRegister = onNavigateToRegister,
+        onDismissNotice = viewModel::clearServerError
+    )
+}
 
-    BoxWithConstraints(
-        modifier = Modifier
+@Composable
+fun LoginContent(
+    uiState: LoginUiState,
+    onEmailChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onNavigateToRegister: () -> Unit,
+    modifier: Modifier = Modifier,
+    onDismissNotice: () -> Unit = {}
+) {
+    val focusManager = LocalFocusManager.current
+    val resolvedServerError = uiState.serverErrorMessage
+        ?: uiState.serverErrorRes?.let { stringResource(id = it) }
+
+    Column(
+        modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .systemBarsPadding()
             .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(top = 12.dp, bottom = 28.dp)
     ) {
-        val viewportMinHeight = maxHeight
+        TaskFlowHeader(
+            title = stringResource(id = R.string.login_title),
+            showBack = false
+        )
+
+        Spacer(modifier = Modifier.height(58.dp))
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .heightIn(min = viewportMinHeight)
-                .padding(horizontal = 24.dp, vertical = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .padding(horizontal = 27.6.dp)
         ) {
-            TaskFlowHeader(
-                title = stringResource(id = R.string.login_title)
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
             AuthTextField(
                 value = uiState.email,
-                onValueChange = viewModel::onEmailChange,
+                onValueChange = onEmailChange,
                 label = stringResource(id = R.string.label_email),
                 placeholder = stringResource(id = R.string.placeholder_email),
-                errorMessageRes = uiState.emailErrorRes,
+                errorMessage = uiState.emailErrorRes?.let { stringResource(id = it) },
+                enabled = !uiState.isLoading,
                 keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next,
-                enabled = !uiState.isLoading
+                imeAction = ImeAction.Next
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(23.dp))
 
             AuthTextField(
                 value = uiState.password,
-                onValueChange = viewModel::onPasswordChange,
+                onValueChange = onPasswordChange,
                 label = stringResource(id = R.string.label_password),
                 placeholder = stringResource(id = R.string.placeholder_password),
+                errorMessage = uiState.passwordErrorRes?.let { stringResource(id = it) },
+                enabled = !uiState.isLoading,
                 isPassword = true,
-                errorMessageRes = uiState.passwordErrorRes,
                 imeAction = ImeAction.Done,
                 keyboardActions = KeyboardActions(
                     onDone = {
                         focusManager.clearFocus()
-                        viewModel.onLoginSubmit()
+                        onSubmit()
                     }
-                ),
-                enabled = !uiState.isLoading
+                )
             )
 
-            if (uiState.serverError != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = uiState.serverError.orEmpty().ifBlank {
-                        stringResource(id = R.string.error_network_generic)
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = {
-                    focusManager.clearFocus()
-                    viewModel.onLoginSubmit()
-                },
-                enabled = !uiState.isLoading,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.5.dp
+            when {
+                uiState.isSessionExpiredNotice -> {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    AuthSessionExpiredNotice(onDismiss = onDismissNotice)
+                    Spacer(modifier = Modifier.height(18.dp))
+                }
+                !resolvedServerError.isNullOrBlank() -> {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    AuthServerErrorText(
+                        message = resolvedServerError,
+                        style = when (uiState.serverErrorKind) {
+                            LoginErrorKind.INVALID_CREDENTIALS -> TaskFlowTextStyles.loginErrorBold
+                            else -> TaskFlowTextStyles.authErrorCompact
+                        }
                     )
-                } else {
-                    Text(
-                        text = stringResource(id = R.string.action_login),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
-                    )
+                    Spacer(modifier = Modifier.height(30.dp))
+                }
+                else -> {
+                    Spacer(modifier = Modifier.height(68.dp))
                 }
             }
 
+            TaskFlowPrimaryButton(
+                text = stringResource(id = R.string.action_login),
+                onClick = {
+                    focusManager.clearFocus()
+                    onSubmit()
+                },
+                enabled = !uiState.isLoading,
+                loading = uiState.isLoading,
+                loadingText = stringResource(id = R.string.action_signing_in)
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
 
-            TextButton(
+            AuthFooterLink(
+                text = stringResource(id = R.string.action_go_to_register),
+                textStyle = TaskFlowTextStyles.authLinkLarge,
                 onClick = onNavigateToRegister,
                 enabled = !uiState.isLoading
-            ) {
-                Text(
-                    text = registerPromptAnnotated,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            )
         }
+    }
+}
+
+@Preview(name = "03 · Inicio de sesión", showBackground = true, widthDp = 414, heightDp = 771)
+@Composable
+private fun Preview03Login() {
+    TaskFlowTheme {
+        LoginContent(
+            uiState = LoginUiState(),
+            onEmailChange = {},
+            onPasswordChange = {},
+            onSubmit = {},
+            onNavigateToRegister = {}
+        )
+    }
+}
+
+@Preview(name = "14 · Credenciales inválidas", showBackground = true, widthDp = 414, heightDp = 771)
+@Composable
+private fun Preview14LoginInvalidCredentials() {
+    TaskFlowTheme {
+        LoginContent(
+            uiState = LoginUiState(
+                serverErrorRes = R.string.error_invalid_credentials,
+                serverErrorKind = LoginErrorKind.INVALID_CREDENTIALS
+            ),
+            onEmailChange = {},
+            onPasswordChange = {},
+            onSubmit = {},
+            onNavigateToRegister = {}
+        )
+    }
+}
+
+@Preview(name = "15 · Sesión caducada", showBackground = true, widthDp = 414, heightDp = 771)
+@Composable
+private fun Preview15LoginSessionExpired() {
+    TaskFlowTheme {
+        LoginContent(
+            uiState = LoginUiState(isSessionExpiredNotice = true),
+            onEmailChange = {},
+            onPasswordChange = {},
+            onSubmit = {},
+            onNavigateToRegister = {}
+        )
+    }
+}
+
+@Preview(name = "21 · Error de conexión al entrar", showBackground = true, widthDp = 414, heightDp = 771)
+@Composable
+private fun Preview21LoginConnectionError() {
+    TaskFlowTheme {
+        LoginContent(
+            uiState = LoginUiState(
+                serverErrorRes = R.string.error_no_connection,
+                serverErrorKind = LoginErrorKind.CONNECTION
+            ),
+            onEmailChange = {},
+            onPasswordChange = {},
+            onSubmit = {},
+            onNavigateToRegister = {}
+        )
     }
 }

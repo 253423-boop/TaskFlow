@@ -12,7 +12,7 @@ data class CreateTaskDto(
     @SerialName("descripcion")
     val descripcion: String? = null,
     @SerialName("fecha_entrega")
-    val fecha_entrega: String,
+    val fechaEntrega: String,
     @SerialName("prioridad")
     val prioridad: Int,
     @SerialName("estado")

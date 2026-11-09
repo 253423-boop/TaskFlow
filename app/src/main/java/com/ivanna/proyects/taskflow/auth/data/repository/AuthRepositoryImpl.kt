@@ -6,15 +6,11 @@ import com.ivanna.proyects.taskflow.auth.data.dto.RegisterRequestDto
 import com.ivanna.proyects.taskflow.auth.data.mapper.toDomain
 import com.ivanna.proyects.taskflow.auth.domain.model.User
 import com.ivanna.proyects.taskflow.auth.domain.repository.AuthRepository
+import com.ivanna.proyects.taskflow.core.network.ApiException
+import com.ivanna.proyects.taskflow.core.network.defaultMapHttpError
+import com.ivanna.proyects.taskflow.core.network.executeApiCall
 import com.ivanna.proyects.taskflow.core.session.SessionManager
-import java.io.IOException
 import java.net.HttpURLConnection
-import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import retrofit2.HttpException
 
 class AuthRepositoryImpl(
@@ -23,15 +19,20 @@ class AuthRepositoryImpl(
 ) : AuthRepository {
 
     override suspend fun login(correo: String, password: String): Result<User> {
-        return executeApiCall {
+        return executeApiCall(
+            mapHttpError = { exception, serverMessage ->
+                mapHttpException(exception, serverMessage, AuthCallContext.LOGIN)
+            }
+        ) {
             val response = apiService.login(
                 LoginRequestDto(
                     correo = correo,
                     password = password
                 )
             )
-            sessionManager.saveToken(response.access_token)
+            sessionManager.saveToken(response.accessToken)
             sessionManager.saveUserName(response.user.nombre)
+            sessionManager.saveUserId(response.user.id)
             response.user.toDomain()
         }
     }
@@ -42,23 +43,32 @@ class AuthRepositoryImpl(
         password: String,
         passwordConfirm: String
     ): Result<User> {
-        return executeApiCall {
+        return executeApiCall(
+            mapHttpError = { exception, serverMessage ->
+                mapHttpException(exception, serverMessage, AuthCallContext.REGISTER)
+            }
+        ) {
             val response = apiService.register(
                 RegisterRequestDto(
                     nombre = nombre,
                     correo = correo,
                     password = password,
-                    password_confirm = passwordConfirm
+                    passwordConfirm = passwordConfirm
                 )
             )
-            sessionManager.saveToken(response.access_token)
+            sessionManager.saveToken(response.accessToken)
             sessionManager.saveUserName(response.user.nombre)
+            sessionManager.saveUserId(response.user.id)
             response.user.toDomain()
         }
     }
 
     override suspend fun getCurrentUser(): Result<User> {
-        return executeApiCall {
+        return executeApiCall(
+            mapHttpError = { exception, serverMessage ->
+                mapHttpException(exception, serverMessage, AuthCallContext.SESSION)
+            }
+        ) {
             apiService.getMe().toDomain()
         }
     }
@@ -71,80 +81,53 @@ class AuthRepositoryImpl(
         return sessionManager.hasActiveSession()
     }
 
-    private inline fun <T> executeApiCall(block: () -> T): Result<T> {
-        return runCatching { block() }.fold(
-            onSuccess = { Result.success(it) },
-            onFailure = { throwable ->
-                if (throwable is CancellationException) {
-                    throw throwable
-                }
-                Result.failure(mapException(throwable))
+    private fun mapHttpException(
+        exception: HttpException,
+        serverMessage: String?,
+        context: AuthCallContext
+    ): ApiException {
+        val code = exception.code()
+        val normalized = serverMessage?.lowercase().orEmpty()
+
+        return when (context) {
+            AuthCallContext.LOGIN -> when (code) {
+                HttpURLConnection.HTTP_UNAUTHORIZED,
+                HttpURLConnection.HTTP_FORBIDDEN ->
+                    ApiException.InvalidCredentials(cause = exception, detail = serverMessage)
+                else ->
+                    defaultMapHttpError(exception, serverMessage)
             }
-        )
-    }
-
-    private fun mapException(throwable: Throwable): Exception {
-        return when (throwable) {
-            is HttpException -> mapHttpException(throwable)
-            is IOException -> Exception("Error de conexión. Verifica tu acceso a Internet.", throwable)
-            is SerializationException -> Exception("Error al procesar la respuesta del servidor.", throwable)
-            is Exception -> throwable
-            else -> Exception(throwable.message ?: "Ocurrió un error inesperado.", throwable)
-        }
-    }
-
-    private fun mapHttpException(exception: HttpException): Exception {
-        val serverMessage = extractServerMessage(exception)
-        val message = when (exception.code()) {
-            HttpURLConnection.HTTP_BAD_REQUEST ->
-                serverMessage ?: "Solicitud inválida. Verifica los datos ingresados."
-            HttpURLConnection.HTTP_UNAUTHORIZED ->
-                serverMessage ?: "Credenciales inválidas o sesión expirada."
-            HttpURLConnection.HTTP_FORBIDDEN ->
-                serverMessage ?: "No tienes permiso para acceder a este recurso."
-            HttpURLConnection.HTTP_NOT_FOUND ->
-                serverMessage ?: "Recurso no encontrado."
-            HttpURLConnection.HTTP_CONFLICT ->
-                serverMessage ?: "El correo electrónico ya se encuentra registrado."
-            HTTP_UNPROCESSABLE_ENTITY ->
-                serverMessage ?: "Los datos enviados no son válidos."
-            in HTTP_SERVER_ERROR_START..HTTP_SERVER_ERROR_END ->
-                serverMessage ?: "Error del servidor. Intenta nuevamente más tarde."
-            else ->
-                serverMessage ?: "Error en la solicitud (código ${exception.code()})."
-        }
-        return Exception(message, exception)
-    }
-
-    private fun extractServerMessage(exception: HttpException): String? {
-        val errorBody = exception.response()?.errorBody()?.string()?.trim()
-        if (errorBody.isNullOrEmpty()) {
-            return null
-        }
-        return runCatching {
-            val element = Json.parseToJsonElement(errorBody)
-            if (element is JsonObject) {
-                val detail = element["detail"]
-                when {
-                    detail is JsonPrimitive && detail.isString -> detail.content
-                    detail is JsonArray -> detail.firstOrNull()
-                        ?.let { item -> (item as? JsonObject)?.get("msg") as? JsonPrimitive }
-                        ?.takeIf { it.isString }
-                        ?.content
-                    else -> {
-                        val fallback = element["message"] ?: element["error"]
-                        (fallback as? JsonPrimitive)?.takeIf { it.isString }?.content
-                    }
-                }
-            } else {
-                null
+            AuthCallContext.REGISTER -> when {
+                code == HttpURLConnection.HTTP_CONFLICT ->
+                    ApiException.DuplicateEmail(cause = exception, detail = serverMessage)
+                (code == HttpURLConnection.HTTP_BAD_REQUEST || code == HTTP_UNPROCESSABLE_ENTITY) &&
+                    (normalized.contains("registrado") ||
+                        normalized.contains("duplicate") ||
+                        normalized.contains("already") ||
+                        normalized.contains("existe")) ->
+                    ApiException.DuplicateEmail(cause = exception, detail = serverMessage)
+                code == HTTP_UNPROCESSABLE_ENTITY &&
+                    (normalized.contains("8") ||
+                        normalized.contains("password") ||
+                        normalized.contains("contraseña") ||
+                        normalized.contains("short") ||
+                        normalized.contains("mínimo") ||
+                        normalized.contains("minimo")) ->
+                    ApiException.ShortPassword(cause = exception, detail = serverMessage)
+                else ->
+                    defaultMapHttpError(exception, serverMessage)
             }
-        }.getOrNull()?.takeIf { it.isNotBlank() }
+            AuthCallContext.SESSION -> defaultMapHttpError(exception, serverMessage)
+        }
+    }
+
+    private enum class AuthCallContext {
+        LOGIN,
+        REGISTER,
+        SESSION
     }
 
     private companion object {
         const val HTTP_UNPROCESSABLE_ENTITY = 422
-        const val HTTP_SERVER_ERROR_START = 500
-        const val HTTP_SERVER_ERROR_END = 599
     }
 }

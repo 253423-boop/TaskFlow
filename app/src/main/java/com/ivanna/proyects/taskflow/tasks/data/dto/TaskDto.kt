@@ -8,7 +8,7 @@ data class TaskDto(
     @SerialName("id")
     val id: Int,
     @SerialName("user_id")
-    val user_id: Int? = null,
+    val userId: Int? = null,
     @SerialName("titulo")
     val titulo: String,
     @SerialName("materia")
@@ -16,7 +16,7 @@ data class TaskDto(
     @SerialName("descripcion")
     val descripcion: String? = null,
     @SerialName("fecha_entrega")
-    val fecha_entrega: String,
+    val fechaEntrega: String,
     @SerialName("prioridad")
     val prioridad: Int? = 2,
     @SerialName("estado")
@@ -24,5 +24,5 @@ data class TaskDto(
     @SerialName("vencida")
     val vencida: Boolean? = false,
     @SerialName("created_at")
-    val created_at: String? = null
+    val createdAt: String? = null
 )

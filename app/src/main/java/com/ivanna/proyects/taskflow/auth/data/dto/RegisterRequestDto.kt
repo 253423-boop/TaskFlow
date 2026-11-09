@@ -12,5 +12,5 @@ data class RegisterRequestDto(
     @SerialName("password")
     val password: String,
     @SerialName("password_confirm")
-    val password_confirm: String
+    val passwordConfirm: String
 )

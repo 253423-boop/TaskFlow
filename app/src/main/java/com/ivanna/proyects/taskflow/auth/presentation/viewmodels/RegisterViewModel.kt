@@ -1,10 +1,10 @@
 package com.ivanna.proyects.taskflow.auth.presentation.viewmodels
 
-import android.util.Patterns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ivanna.proyects.taskflow.auth.domain.repository.AuthRepository
 import com.ivanna.proyects.taskflow.auth.presentation.screens.RegisterUiState
+import com.ivanna.proyects.taskflow.core.network.ApiException
 import com.upchiapas.taskflow.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +24,8 @@ class RegisterViewModel(
             it.copy(
                 name = name,
                 nameErrorRes = null,
-                serverError = null
+                serverErrorRes = null,
+                serverErrorMessage = null
             )
         }
     }
@@ -34,7 +35,8 @@ class RegisterViewModel(
             it.copy(
                 email = email,
                 emailErrorRes = null,
-                serverError = null
+                serverErrorRes = null,
+                serverErrorMessage = null
             )
         }
     }
@@ -44,7 +46,8 @@ class RegisterViewModel(
             it.copy(
                 password = password,
                 passwordErrorRes = null,
-                serverError = null
+                serverErrorRes = null,
+                serverErrorMessage = null
             )
         }
     }
@@ -54,13 +57,10 @@ class RegisterViewModel(
             it.copy(
                 confirmPassword = confirmPassword,
                 confirmPasswordErrorRes = null,
-                serverError = null
+                serverErrorRes = null,
+                serverErrorMessage = null
             )
         }
-    }
-
-    fun clearServerError() {
-        _uiState.update { it.copy(serverError = null) }
     }
 
     fun onRegisterSubmit() {
@@ -79,7 +79,7 @@ class RegisterViewModel(
         }
 
         val emailErrorRes = if (
-            trimmedEmail.isBlank() || !Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()
+            trimmedEmail.isBlank() || !AuthValidation.isValidEmail(trimmedEmail)
         ) {
             R.string.error_invalid_email
         } else {
@@ -112,7 +112,8 @@ class RegisterViewModel(
                     emailErrorRes = emailErrorRes,
                     passwordErrorRes = passwordErrorRes,
                     confirmPasswordErrorRes = confirmPasswordErrorRes,
-                    serverError = null
+                    serverErrorRes = null,
+                    serverErrorMessage = null
                 )
             }
             return
@@ -124,7 +125,8 @@ class RegisterViewModel(
                 emailErrorRes = null,
                 passwordErrorRes = null,
                 confirmPasswordErrorRes = null,
-                serverError = null,
+                serverErrorRes = null,
+                serverErrorMessage = null,
                 isLoading = true
             )
         }
@@ -145,14 +147,28 @@ class RegisterViewModel(
                     }
                 },
                 onFailure = { throwable ->
+                    val (errorRes, errorDetail) = mapRegisterFailure(throwable)
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            serverError = throwable.message
+                            serverErrorRes = errorRes,
+                            serverErrorMessage = errorDetail
                         )
                     }
                 }
             )
+        }
+    }
+
+    private fun mapRegisterFailure(throwable: Throwable): Pair<Int?, String?> {
+        return when (throwable) {
+            is ApiException.DuplicateEmail -> R.string.error_email_already_registered to null
+            is ApiException.ShortPassword -> R.string.error_short_password to null
+            is ApiException.NoConnection -> R.string.error_no_connection to null
+            is ApiException.HttpError ->
+                (if (throwable.detail == null) R.string.error_unexpected else null) to throwable.detail
+            else ->
+                R.string.error_unexpected to throwable.message?.takeIf { it.isNotBlank() }
         }
     }
 

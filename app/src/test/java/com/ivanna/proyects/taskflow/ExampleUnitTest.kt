@@ -1,17 +1,22 @@
 package com.ivanna.proyects.taskflow
 
+import com.ivanna.proyects.taskflow.tasks.domain.model.TaskPriority
+import com.ivanna.proyects.taskflow.tasks.domain.model.TaskStatus
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
-import org.junit.Assert.*
-
-/**
- * Example local unit test, which will execute on the development machine (host).
- *
- * See [testing documentation](http://d.android.com/tools/testing).
- */
 class ExampleUnitTest {
+
     @Test
-    fun addition_isCorrect() {
-        assertEquals(4, 2 + 2)
+    fun taskDomainEnumsMapLevelsAndApiValuesWithSafeDefaults() {
+        assertEquals(TaskPriority.BAJA, TaskPriority.fromLevel(1))
+        assertEquals(TaskPriority.MEDIA, TaskPriority.fromLevel(2))
+        assertEquals(TaskPriority.ALTA, TaskPriority.fromLevel(3))
+        assertEquals(TaskPriority.MEDIA, TaskPriority.fromLevel(99))
+        assertEquals(TaskPriority.MEDIA, TaskPriority.fromLevel(null))
+
+        assertEquals(TaskStatus.COMPLETADA, TaskStatus.fromApiValue(" COMPLETADA "))
+        assertEquals(TaskStatus.PENDIENTE, TaskStatus.fromApiValue("pendiente"))
+        assertEquals(TaskStatus.PENDIENTE, TaskStatus.fromApiValue(null))
     }
 }
